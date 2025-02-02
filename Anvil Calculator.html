@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Combination Finder</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        padding: 20px;
+      }
+      .container {
+        margin-bottom: 20px;
+      }
+      input,
+      button {
+        padding: 8px;
+        margin: 5px;
+      }
+      .combination-list {
+        margin-top: 20px;
+      }
+      .combination-item {
+        background-color: #e0e0e0;
+        padding: 5px;
+        margin: 5px 0;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .combination-item button {
+        background-color: #ff4d4d;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      .combination-item button:hover {
+        background-color: #e60000;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Combination Finder</h1>
+
+    <div class="container">
+      <label for="target">Target Sum: </label>
+      <input type="number" id="target" value="113" />
+    </div>
+
+    <div class="container">
+      <label for="presetActions"
+        >Preset Actions (comma separated, e.g., Draw, Any Hit, Any Hit):</label
+      >
+      <input type="text" id="presetActions" value="Draw, Any Hit, Any Hit" />
+    </div>
+
+    <div class="container">
+      <label for="customName">Custom Combination Name: </label>
+      <input type="text" id="customName" value="My Combination" />
+    </div>
+
+    <div class="container">
+      <button onclick="findCombinations()">Find Combinations</button>
+    </div>
+
+    <h3>Saved Combinations</h3>
+    <div class="combination-list" id="combinationList"></div>
+
+    <script>
+      const numToName = {
+        "-3": "Light Hit",
+        "-6": "Medium Hit",
+        "-9": "Heavy Hit",
+        "-15": "Draw",
+        2: "Punch",
+        7: "Bend",
+        13: "Upset",
+        16: "Shrink",
+      };
+
+      const nameToNum = {
+        "Light Hit": -3,
+        "Medium Hit": -6,
+        "Heavy Hit": -9,
+        Draw: -15,
+        Punch: 2,
+        Bend: 7,
+        Upset: 13,
+        Shrink: 16,
+      };
+
+      const nums = [-3, -6, -9, -15, 2, 7, 13, 16];
+      const hitOptions = ["Light Hit", "Medium Hit", "Heavy Hit"];
+
+      // Load saved combinations from localStorage
+      let savedCombinations =
+        JSON.parse(localStorage.getItem("savedCombinations")) || [];
+
+      function findCombinations() {
+        const target = parseInt(document.getElementById("target").value);
+        const presetActionsInput =
+          document.getElementById("presetActions").value;
+        const presetActions = presetActionsInput
+          .split(",")
+          .map((action) => action.trim());
+        const customName = document.getElementById("customName").value;
+
+        // Adjust preset actions for "Any Hit"
+        const adjustedPresetActions = presetActions.map((action) => {
+          if (action === "Any Hit") {
+            return findBestHitOption(target);
+          }
+          return action;
+        });
+
+        const result = smallestUnboundedSubsetSum(
+          nums,
+          target,
+          adjustedPresetActions
+        );
+
+        if (result.success) {
+          savedCombinations.push({
+            name: customName,
+            combination: result.combination,
+          });
+          // Save combinations to localStorage
+          localStorage.setItem(
+            "savedCombinations",
+            JSON.stringify(savedCombinations)
+          );
+          displaySavedCombinations();
+        } else {
+          alert("No combination found!");
+        }
+      }
+
+      function displaySavedCombinations() {
+        const listContainer = document.getElementById("combinationList");
+        listContainer.innerHTML = ""; // Clear previous results
+
+        savedCombinations.forEach((combinationData, index) => {
+          const combinationElement = document.createElement("div");
+          combinationElement.classList.add("combination-item");
+          const displayCombination = getFormattedCombination(
+            combinationData.combination
+          );
+          combinationElement.innerHTML = ` 
+                <span><strong>${combinationData.name}:</strong> ${displayCombination}</span>
+                <button onclick="deleteCombination(${index})">Delete</button>
+            `;
+          listContainer.appendChild(combinationElement);
+        });
+      }
+
+      // Function to format combination to show as action * x -> action * y -> ...
+      function getFormattedCombination(combination) {
+        const presetActions = combination.filter(
+          (action) =>
+            action === "Draw" ||
+            action === "Light Hit" ||
+            action === "Medium Hit" ||
+            action === "Heavy Hit" ||
+            action === "Punch" ||
+            action === "Bend" ||
+            action === "Upset" ||
+            action === "Shrink"
+        );
+        const calculatedActions = combination.filter(
+          (action) =>
+            action !== "Draw" &&
+            action !== "Light Hit" &&
+            action !== "Medium Hit" &&
+            action !== "Heavy Hit" &&
+            action !== "Punch" &&
+            action !== "Bend" &&
+            action !== "Upset" &&
+            action !== "Shrink"
+        );
+
+        const counts = {};
+        calculatedActions.forEach((action) => {
+          counts[action] = (counts[action] || 0) + 1;
+        });
+
+        const formattedCalculatedActions = Object.keys(counts)
+          .map((action) => `${getActionName(action)} * ${counts[action]}`)
+          .join(" -> ");
+
+        const formattedPresetActions = presetActions.join(" -> ");
+
+        if (formattedPresetActions) {
+          return `${formattedCalculatedActions} -> ${formattedPresetActions}`;
+        } else {
+          return formattedCalculatedActions;
+        }
+      }
+
+      function getActionName(action) {
+        return numToName[action] || action;
+      }
+
+      // Function to delete a saved combination with confirmation
+      function deleteCombination(index) {
+        // Display a confirmation dialog
+        const confirmation = window.confirm(
+          "Are you sure you want to delete this combination?"
+        );
+
+        // If the user confirms, delete the combination
+        if (confirmation) {
+          savedCombinations.splice(index, 1);
+          displaySavedCombinations(); // Refresh the displayed combinations
+        }
+      }
+
+      function smallestUnboundedSubsetSum(nums, target, presetActions) {
+        const presetSum = presetActions.reduce(
+          (sum, action) => sum + (nameToNum[action] || 0),
+          0
+        );
+        const newTarget = target - presetSum;
+
+        if (newTarget === 0) {
+          return { success: true, combination: presetActions };
+        }
+
+        const queue = [{ sum: 0, combination: [] }];
+        const visited = new Set([0]);
+
+        while (queue.length > 0) {
+          const { sum, combination } = queue.shift();
+
+          if (sum === newTarget) {
+            return {
+              success: true,
+              combination: [...combination, ...presetActions],
+            };
+          }
+
+          for (const num of nums) {
+            const newSum = sum + num;
+            if (!visited.has(newSum)) {
+              visited.add(newSum);
+              queue.push({ sum: newSum, combination: [...combination, num] });
+            }
+          }
+        }
+
+        return { success: false, combination: [] };
+      }
+
+      function findBestHitOption(target) {
+        let bestCombination = null;
+        let bestCombinationLength = Infinity;
+
+        hitOptions.forEach((hitOption) => {
+          const actionValue = nameToNum[hitOption];
+          const remainingTarget = target - actionValue;
+          const result = smallestUnboundedSubsetSum(nums, remainingTarget, []);
+          if (
+            result.success &&
+            result.combination.length < bestCombinationLength
+          ) {
+            bestCombination = hitOption;
+            bestCombinationLength = result.combination.length;
+          }
+        });
+
+        return bestCombination;
+      }
+
+      // Display saved combinations on page load
+      displaySavedCombinations();
+    </script>
+  </body>
+</html>
